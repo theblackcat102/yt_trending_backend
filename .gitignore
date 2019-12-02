@@ -5,7 +5,11 @@ __pycache__/
 
 # C extensions
 *.so
-
+.env
+.vscode
+tag_frequency_TW.json
+tag_frequency_TW.txt
+video_blacklist_tag_0.7.txt
 # Distribution / packaging
 .Python
 build/
