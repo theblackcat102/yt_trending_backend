@@ -7,7 +7,7 @@ DEBUG = True
 
 POSTGRESQL_SETTINGS = {
     'DATABASE': os.getenv('DATABASE'),
-    'USER': os.getenv('USER'),
+    'USER': os.getenv('DB_USER'),
     'HOST': os.getenv('HOST'),   
     'PORT': os.getenv('PORT'),
     'PASSWORD': os.getenv('PASSWORD'),
