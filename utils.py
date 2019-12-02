@@ -35,7 +35,7 @@ def get_unit_value(date, unit):
         return date.year
 
 def extract_video_unique_keyword(video_id):
-    video = Video.select(Video.tags, Video.meta).where(Video.id == video_id).get()
+    video = Video.select(Video.tags, Video.meta, Video.channel).where(Video.id == video_id).get()
 
     tags = video.tags #['tags']
     result = []
@@ -50,8 +50,11 @@ def extract_video_unique_keyword(video_id):
 
         if tag in black_list_tags:
             continue
-
-        title_similarity = fuzz.ratio(tag, video.meta['channel']['title'])
+        if 'channel' in video.meta:
+            channel_title = video.meta['channel']['title']
+        else:
+            channel_title = video.channel.title
+        title_similarity = fuzz.ratio(tag, channel_title)
         if title_similarity > 40:
             continue
 
