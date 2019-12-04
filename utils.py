@@ -138,7 +138,7 @@ def cluster_stats_date(stats, unit):
 
     return tag_data
 
-@cached(cache=LRUCache(maxsize=128))
+@cached(cache=LRUCache(maxsize=512))
 def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, end: datetime=None, 
     sum:bool=False, topic_limit=100):
     if unit not in ['week', 'day', 'month', 'year']:
@@ -198,8 +198,7 @@ def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, 
     result['topic'].sort(key=lambda x: x[1], reverse=True)
     return result
 
-
-@cached(cache=LRUCache(maxsize=128))
+@cached(cache=LRUCache(maxsize=512))
 def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None, end: datetime=None, 
     topic_limit=100, sum:bool=False):
     if unit not in ['week', 'day', 'month', 'year']:
