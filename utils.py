@@ -140,7 +140,8 @@ def cluster_stats_date(stats, unit):
 
 @cached(cache=LRUCache(maxsize=512))
 def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, end: datetime=None, 
-    sum:bool=False, topic_limit=100):
+    sum:bool=False, topic_limit=100, 
+    lw: float=0, vw: float=0, cw: float=0, rw: float=1, dw: float=0):
     if unit not in ['week', 'day', 'month', 'year']:
         raise ValueError("Invalid unit value")
 
@@ -191,7 +192,7 @@ def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, 
             df = pd.DataFrame(data)
             df['norm_view'] = df['view']/df['view'].sum()
             # df['weight'] =  (df['like'] + df['dislike'])/df['view'] + ((101-df['rank'])*1000)*df['norm_view']
-            df['weight'] = 101-df['rank']
+            df['weight'] = (101-df['rank'])*rw + ((df['comment']*cw) + (df['view']*vw) + (df['like']*lw) - (df['dislike']*dw))/df['view']
             interest_weight = df['weight'].mean()
             total_weight += interest_weight
             result['topic'].append((key.lower(), interest_weight))
@@ -202,7 +203,8 @@ def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, 
 
 @cached(cache=LRUCache(maxsize=512))
 def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None, end: datetime=None, 
-    topic_limit=100, sum:bool=False):
+    topic_limit=100, sum:bool=False, 
+    lw: float=0, vw: float=0, cw: float=0, rw: float=1, dw: float=0):
     if unit not in ['week', 'day', 'month', 'year']:
         raise ValueError("Invalid unit value")
     target_region = Region.get(Region.region_id == region_id)
@@ -238,7 +240,7 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
         return result
     df = pd.concat(stats, axis=0)
     df['date'] = pd.to_datetime(df['date'])
-    print(len(df))
+    # print(len(df))
 
     tag_data = cluster_stats_date(df, unit)
 
@@ -248,8 +250,8 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
         if len(key) > 3 and len(key) < 30:
             df = pd.DataFrame(data)
             df['norm_view'] = df['view']/df['view'].sum()
-            df['weight'] =  (df['like'] + df['dislike'])/df['view'] + ((101-df['rank'])*1000)*df['norm_view']
-            df['weight'] = 101-df['rank']
+            # df['weight'] =  (df['like'] + df['dislike'])/df['view'] + ((101-df['rank'])*1000)*df['norm_view']
+            df['weight'] = (101-df['rank'])*rw + ((df['comment']*cw) + (df['view']*vw) + (df['like']*lw) - (df['dislike']*dw))/df['view']
             stats = df[['weight', 'like', 'dislike', 'view', 'rank', 'norm_view', 'date']].to_dict(orient='records')
             result['topic'].append({
                 'tag': key,
@@ -258,5 +260,5 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
     return result
 
 if __name__ == '__main__':
-    data = topic_interest('TW', 'month', topic_limit=10)
+    data = topic_filter('TW', 'week', topic_limit=10)
     print(len(data['topic']))
