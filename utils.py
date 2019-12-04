@@ -124,7 +124,7 @@ def cluster_stats_date(stats, unit):
     if True:
         dfs = np.split(stats, [len(stats)//3, len(stats)//2, len(stats)*2//3], axis=0)
 
-        pool = CustomPool(3)
+        pool = mp.Pool(3)
 
         results = pool.map(_extract_tag, dfs)
         pool.close()
