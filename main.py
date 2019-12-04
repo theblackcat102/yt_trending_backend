@@ -36,7 +36,7 @@ def primary_view(search: str=None, unit: str="hourly",
         param = (r, unit, search, start, end, top)
         params.append(param)
 
-    pool = CustomPool(8)
+    pool = CustomPool(4)
 
     p_results = pool.starmap(topic_interest, params)
     pool.close()

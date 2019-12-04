@@ -16,12 +16,28 @@ class NoDaemonProcess(multiprocessing.Process):
         return False
     def _set_daemon(self, value):
         pass
+
+    @property
+    def daemon(self):
+        return False
+
+    @daemon.setter
+    def daemon(self, val):
+        pass
     daemon = property(_get_daemon, _set_daemon)
 
 # We sub-class multiprocessing.pool.Pool instead of multiprocessing.Pool
 # because the latter is only a wrapper function, not a proper class.
-class CustomPool(multiprocessing.pool.Pool):
+
+class NoDaemonContext(type(multiprocessing.get_context())):
     Process = NoDaemonProcess
+class CustomPool(multiprocessing.pool.Pool):
+    def __init__(self, *args, **kwargs):
+        kwargs['context'] = NoDaemonContext()
+        super(CustomPool, self).__init__(*args, **kwargs)
+
+# class CustomPool(multiprocessing.pool.Pool):
+#     Process = NoDaemonProcess
 
 def sleepawhile(t):
     print("Sleeping %i seconds..." % t)
