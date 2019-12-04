@@ -109,50 +109,29 @@ def cluster_stats_date(stats, unit):
     tag_data = defaultdict(list)
     stats['unit'] = unit
 
-    dfs = np.split(stats, [len(stats)//3, len(stats)//2, len(stats)*2//3], axis=0)
+    if True:
+        dfs = np.split(stats, [len(stats)//3, len(stats)//2, len(stats)*2//3], axis=0)
 
-    pool = mp.Pool(3)
+        pool = mp.Pool(3)
 
-    results = pool.map(_extract_tag, dfs)
-    pool.close()
-
-    for r in results:
-        for key, value in r.items():
+        results = pool.map(_extract_tag, dfs)
+        pool.close()
+        for r in results:
+            for key, value in r.items():
+                tag_data[key] += value
+    else:
+        results =  _extract_tag(stats)
+        for key, value in results.items():
             tag_data[key] += value
+
     return tag_data
 
 @cached(cache=LRUCache(maxsize=128))
-def topic_interest(region, unit: str, search:str=None, start: datetime=None, end: datetime=None, 
+def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, end: datetime=None, 
     sum:bool=False, topic_limit=100):
     if unit not in ['week', 'day', 'month', 'year']:
         raise ValueError("Invalid unit value")
-
-    if end is None:
-        end = datetime.now()
-        # end = datetime(year=end.year, month=end.month, day=end.day, hour=end.hour)
-    if start is None:
-        start = end-relativedelta(days=unit_value[unit])
-
-    videos = Video.select().where((Video.published >= start) & (Video.published <= end))
-    stats = []
-    # for v in videos:
-    statistic = Stats.select().where((Stats.trending_region == region) & Stats.video.in_(videos))
-
-    for s in statistic:
-        v = s.video
-        if 'data' not in s.stats:
-            continue
-        sub_stats = s.stats['data']
-        t = pd.DataFrame(sub_stats)
-        t['video'] = v
-        stats.append(t)
-    
-    df = pd.concat(stats, axis=0)
-    df['date'] = pd.to_datetime(df['date'])
-    print(len(df))
-    tag_data = cluster_stats_date(df, unit)
-
-
+    region = Region.get(Region.region_id == region_id)
     result = {
         'id': region.region_id,
         'name': region.name,
@@ -162,6 +141,35 @@ def topic_interest(region, unit: str, search:str=None, start: datetime=None, end
             'lon': region.lon
         }
     }
+
+    if end is None:
+        end = datetime.now()
+        # end = datetime(year=end.year, month=end.month, day=end.day, hour=end.hour)
+    if start is None:
+        start = end-relativedelta(days=unit_value[unit])
+
+    videos = Video.select().where((Video.published >= start) & (Video.published <= end))
+
+    # for v in videos:
+    statistic = Stats.select().where((Stats.trending_region == region) & Stats.video.in_(videos))
+    stats = []
+    for s in statistic:
+        v = s.video
+        if 'data' not in s.stats:
+            continue
+        sub_stats = s.stats['data']
+        t = pd.DataFrame(sub_stats)
+        t['video'] = v
+        stats.append(t)
+
+    if len(stats) == 0:
+        return result
+
+    df = pd.concat(stats, axis=0)
+    df['date'] = pd.to_datetime(df['date'])
+    print(len(df))
+    tag_data = cluster_stats_date(df, unit)
+
     total_weight = 0
     for key, data in tag_data.items():
         if len(key) > 3 and len(key) < 30:
@@ -180,17 +188,26 @@ def topic_interest(region, unit: str, search:str=None, start: datetime=None, end
 
 @cached(cache=LRUCache(maxsize=128))
 def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None, end: datetime=None, 
-    sum:bool=False, topic_limit=100):
+    topic_limit=100, sum:bool=False):
     if unit not in ['week', 'day', 'month', 'year']:
         raise ValueError("Invalid unit value")
-
+    target_region = Region.get(Region.region_id == region_id)
+    result = {
+        'id': target_region.region_id,
+        'name': target_region.name,
+        'topic': [],
+        'geo': {
+            'lat': target_region.lat,
+            'lon': target_region.lon
+        }
+    }
     if end is None:
         end = datetime.now()
         end = datetime(year=end.year, month=end.month, day=end.day, hour=end.hour)
     if start is None:
         start = end-relativedelta(days=unit_value[unit])
 
-    target_region = Region.get(Region.region_id == region_id)
+
     videos = Video.select().where((Video.published >= start) & (Video.published <= end))
     stats = []
     # for v in videos:
@@ -204,22 +221,15 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
         t = pd.DataFrame(sub_stats)
         t['video'] = v
         stats.append(t)
-    
+    if len(stats) == 0:
+        return result
     df = pd.concat(stats, axis=0)
     df['date'] = pd.to_datetime(df['date'])
     print(len(df))
 
     tag_data = cluster_stats_date(df, unit)
 
-    result = {
-        'id': target_region.region_id,
-        'name': target_region.name,
-        'topic': [],
-        'geo': {
-            'lat': target_region.lat,
-            'lon': target_region.lon
-        }
-    }
+
     total_weight = 0
 
     for key, data in tag_data.items():
