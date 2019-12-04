@@ -22,3 +22,6 @@ FR
 CH
 TH
 SK
+JP
+GR
+AR

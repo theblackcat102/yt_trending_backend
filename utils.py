@@ -41,21 +41,24 @@ def extract_video_unique_keyword(video):
     tags = video.tags
     result = []
     cleaned_tags = []
-
     for tag in tags:
         cleaned_tags += re.split(r',|、|，|】', tag)
 
     for tag in cleaned_tags:
+
+        if len(tag) <= 1:
+            continue
         if tag[:3] == 'sp:':
             continue
-
         if tag in black_list_tags:
             continue
-        if 'channel' in video.meta:
+
+        if 'channel' in video.meta and 'title' in video.meta:
             channel_title = video.meta['channel']['title']
-            title_similarity = fuzz.ratio(tag, channel_title)
-            if title_similarity > 40:
-                continue
+            if len(channel_title) != 0:
+                title_similarity = fuzz.ratio(tag, channel_title)
+                if title_similarity > 40:
+                    continue
 
         match = process.extractBests(tag, cleaned_tags)
         result.append(match[0][0])
@@ -70,8 +73,12 @@ def cluster_tags(tag_pair):
 
         if tag in added_tag:
             continue
+        if len(tag) <= 1:
+            continue
 
         for tag2, value in tag_pair:
+            if len(tag2) <= 1:
+                continue
             match_score = fuzz.ratio(tag, tag2)
             if match_score > 30:
                 similar_tag.append((match_score, tag2, value))
@@ -97,7 +104,7 @@ def _extract_tag(df):
         key = '{}-{}'.format(prime_key, secondary_key)
         s_dict = s
         s_dict['key'] = key
-        tags = extract_video_unique_keyword(s['video'])
+        tags = s['video'].tags
         for tag in tags:
             tag_data[tag].append(s_dict)        
     return tag_data
@@ -153,7 +160,7 @@ def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, 
     # for v in videos:
     statistic = Stats.select().where((Stats.trending_region == region) & Stats.video.in_(videos))
     stats = []
-    for s in statistic:
+    for s in tqdm(statistic):
         v = s.video
         if 'data' not in s.stats:
             continue
@@ -246,14 +253,6 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
     return result
 
 if __name__ == '__main__':
-    # all_region = [r.region_id for r in Region.select() if r.region_id != '00']
-    # for r in all_region:
-    #     data = topic_interest(r, 'week', topic_limit=200)
-    #     data = topic_interest(r, 'day', topic_limit=200)
-    #     data = topic_interest(r, 'month', topic_limit=200)
-    #     data = topic_filter(r, 'week', topic_limit=200)
-    #     data = topic_filter(r, 'day', topic_limit=200)
-    #     data = topic_filter(r, 'month', topic_limit=200)
-    data = topic_interest(Region.get(Region.region_id == 'TW'), 'month')
-    data = topic_filter('TW', 'month')
-    print(data)
+    data = topic_interest('TW', 'month', topic_limit=10)
+    # data = topic_filter('TW', 'week', topic_limit=10)
+    print(len(data['topic']))
