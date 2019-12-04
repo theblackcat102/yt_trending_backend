@@ -1,4 +1,4 @@
-from models import Video, Statistic, Activity, DataPoint, Region, Channel, Stats
+from models import Video, Activity, Region, Channel, Stats, postgres_database
 from cachetools import LRUCache, cached
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -12,6 +12,7 @@ import math
 import re
 import logging
 import multiprocessing as mp
+from custom_pool import CustomPool
 from cache import MainCache, SecondaryCache, get_main_cache
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
 
@@ -21,7 +22,6 @@ unit_value = {
     'day': 1,
     'week': 7,
     'month': 30,
-    'year': 365
 }
 
 
@@ -53,17 +53,22 @@ def extract_video_unique_keyword(video):
         if tag in black_list_tags:
             continue
 
-        if 'channel' in video.meta and 'title' in video.meta:
+        if 'channel' in video.meta and 'title' in video.meta['channel']:
             channel_title = video.meta['channel']['title']
             if len(channel_title) != 0:
                 title_similarity = fuzz.ratio(tag, channel_title)
-                if title_similarity > 40:
+                if title_similarity > 30:
                     continue
 
         match = process.extractBests(tag, cleaned_tags)
         result.append(match[0][0])
+    f_tags = list(set(result))
 
-    return list(set(result))
+    with postgres_database.atomic():
+        video.tags = f_tags
+        video.save()
+
+    return f_tags
 
 def cluster_tags(tag_pair):
     final_tag = []
@@ -119,7 +124,7 @@ def cluster_stats_date(stats, unit):
     if True:
         dfs = np.split(stats, [len(stats)//3, len(stats)//2, len(stats)*2//3], axis=0)
 
-        pool = mp.Pool(3)
+        pool = CustomPool(3)
 
         results = pool.map(_extract_tag, dfs)
         pool.close()
@@ -160,12 +165,13 @@ def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, 
     # for v in videos:
     statistic = Stats.select().where((Stats.trending_region == region) & Stats.video.in_(videos))
     stats = []
-    for s in tqdm(statistic):
+    for s in statistic:
         v = s.video
         if 'data' not in s.stats:
             continue
         sub_stats = s.stats['data']
         t = pd.DataFrame(sub_stats)
+        v.tags = extract_video_unique_keyword(v)
         t['video'] = v
         stats.append(t)
 
@@ -174,7 +180,7 @@ def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, 
 
     df = pd.concat(stats, axis=0)
     df['date'] = pd.to_datetime(df['date'])
-    print(len(df))
+    # print(len(df))
     tag_data = cluster_stats_date(df, unit)
 
     total_weight = 0
@@ -214,7 +220,6 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
     if start is None:
         start = end-relativedelta(days=unit_value[unit])
 
-
     videos = Video.select().where((Video.published >= start) & (Video.published <= end))
     stats = []
     # for v in videos:
@@ -236,7 +241,6 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
 
     tag_data = cluster_stats_date(df, unit)
 
-
     total_weight = 0
 
     for key, data in tag_data.items():
@@ -254,5 +258,4 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
 
 if __name__ == '__main__':
     data = topic_interest('TW', 'month', topic_limit=10)
-    # data = topic_filter('TW', 'week', topic_limit=10)
     print(len(data['topic']))

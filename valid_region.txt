@@ -16,7 +16,6 @@ BR
 ZA
 AU
 NZ
-PT
 IT
 FR
 CH
@@ -25,3 +24,4 @@ SK
 JP
 GR
 AR
+TW
