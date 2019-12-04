@@ -15,7 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-all_region = [r.region_id for r in Region.select() if r.region_id != '00']
+all_region = [ r.strip() for r in open('valid_region.txt', 'r').readlines() ]
 
 @app.get("/main")
 def primary_view(search: str=None, unit: str="hourly",
