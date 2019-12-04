@@ -6,7 +6,7 @@ from models import Region
 import multiprocessing as mp
 from custom_pool import CustomPool
 
-app = FastAPI()
+app = FastAPI(debug=False)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=['*'],
@@ -18,10 +18,16 @@ app.add_middleware(
 all_region = [ r.strip() for r in open('valid_region.txt', 'r').readlines() ]
 
 @app.get("/main")
-def primary_view(search: str=None, unit: str="hourly",
+def primary_view(search: str=None, unit: str="day",
     region: str="all", start:str=None, end:str=None,
     lw: float=1, vw: float=1, cw: float=1, rw: float=1, dw: float=1,
     top: int=5):
+
+    if unit not in ['week', 'day', 'month', 'year']:
+        return {
+            'status': 'error',
+            'msg': "unit should be :week, day, month, year"
+        }
 
     target_regions = all_region
     if region != "all":
@@ -36,7 +42,7 @@ def primary_view(search: str=None, unit: str="hourly",
         param = (r, unit, search, start, end, top)
         params.append(param)
 
-    pool = CustomPool(4)
+    pool = CustomPool(1)
 
     p_results = pool.starmap(topic_interest, params)
     pool.close()
@@ -53,11 +59,16 @@ def primary_view(search: str=None, unit: str="hourly",
 
 
 @app.get("/main/{region_id}")
-def read_item(search: str="", unit: str="hourly",
-    start:str="", end:str="",
+def read_item(region_id:str, search: str="", unit: str="day",
+    start:str=None, end:str=None,
     lw: float=1, vw: float=1, cw: float=1, rw: float=1, dw: float=1,
     top: int=5):
 
+    if unit not in ['week', 'day', 'month', 'year']:
+        return {
+            'status': 'error',
+            'msg': "unit should be :week, day, month, year"
+        }
     result = topic_filter(region_id, unit=unit, search=search,
         start=start, end=end, topic_limit=top)
 

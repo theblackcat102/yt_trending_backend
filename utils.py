@@ -121,10 +121,10 @@ def cluster_stats_date(stats, unit):
     tag_data = defaultdict(list)
     stats['unit'] = unit
 
-    if True:
+    if False:
         dfs = np.split(stats, [len(stats)//3, len(stats)//2, len(stats)*2//3], axis=0)
 
-        pool = mp.Pool(3)
+        pool = CustomPool(3)
 
         results = pool.map(_extract_tag, dfs)
         pool.close()
@@ -143,6 +143,8 @@ def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, 
     sum:bool=False, topic_limit=100):
     if unit not in ['week', 'day', 'month', 'year']:
         raise ValueError("Invalid unit value")
+
+
     region = Region.get(Region.region_id == region_id)
     result = {
         'id': region.region_id,
