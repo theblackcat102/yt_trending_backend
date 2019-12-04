@@ -1,15 +1,18 @@
-from models import Video, Statistic, Activity, DataPoint, Region, Channel
+from models import Video, Statistic, Activity, DataPoint, Region, Channel, Stats
 from cachetools import LRUCache, cached
 from datetime import datetime, timedelta
 from collections import defaultdict
 from dateutil.relativedelta import relativedelta 
 from playhouse.shortcuts import model_to_dict, dict_to_model
 import pandas as pd
+import numpy as np
 from fuzzywuzzy import process, fuzz
 from tqdm import tqdm
 import math
 import re
 import logging
+import multiprocessing as mp
+from cache import MainCache, SecondaryCache, get_main_cache
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
 
 black_list_tags = list(set([ tag.strip() for tag in open('blacklist.txt', 'r').readlines() ]))
@@ -34,10 +37,8 @@ def get_unit_value(date, unit):
     elif unit == 'yearly':
         return date.year
 
-def extract_video_unique_keyword(video_id):
-    video = Video.select(Video.tags, Video.meta, Video.channel).where(Video.id == video_id).get()
-
-    tags = video.tags #['tags']
+def extract_video_unique_keyword(video):
+    tags = video.tags
     result = []
     cleaned_tags = []
 
@@ -52,11 +53,9 @@ def extract_video_unique_keyword(video_id):
             continue
         if 'channel' in video.meta:
             channel_title = video.meta['channel']['title']
-        else:
-            channel_title = video.channel.title
-        title_similarity = fuzz.ratio(tag, channel_title)
-        if title_similarity > 40:
-            continue
+            title_similarity = fuzz.ratio(tag, channel_title)
+            if title_similarity > 40:
+                continue
 
         match = process.extractBests(tag, cleaned_tags)
         result.append(match[0][0])
@@ -74,7 +73,7 @@ def cluster_tags(tag_pair):
 
         for tag2, value in tag_pair:
             match_score = fuzz.ratio(tag, tag2)
-            if match_score > 50:
+            if match_score > 30:
                 similar_tag.append((match_score, tag2, value))
 
         if len(similar_tag) == 0:
@@ -90,22 +89,36 @@ def cluster_tags(tag_pair):
     return final_tag
 
 
-def cluster_stats_date(stats, unit):
+def _extract_tag(df):
     tag_data = defaultdict(list)
-
-    # exist_video = {}
-    stats = list(stats.dicts())
-    for s in tqdm(stats):
-        if s is None:
-            continue
-        prime_key = get_unit_value(s['date'], unit)
+    for _, s in df.iterrows():
+        prime_key = get_unit_value(s['date'],s['unit'])
         secondary_key = s['date'].year
         key = '{}-{}'.format(prime_key, secondary_key)
         s_dict = s
         s_dict['key'] = key
         tags = extract_video_unique_keyword(s['video'])
         for tag in tags:
-            tag_data[tag].append(s_dict)
+            tag_data[tag].append(s_dict)        
+    return tag_data
+
+def cluster_stats_date(stats, unit):
+    tag_data = defaultdict(list)
+    # exist_video = {}
+    # stats = stats.to_dict()
+    tag_data = defaultdict(list)
+    stats['unit'] = unit
+
+    dfs = np.split(stats, [len(stats)//3, len(stats)//2, len(stats)*2//3], axis=0)
+
+    pool = mp.Pool(3)
+
+    results = pool.map(_extract_tag, dfs)
+    pool.close()
+
+    for r in results:
+        for key, value in r.items():
+            tag_data[key] += value
     return tag_data
 
 @cached(cache=LRUCache(maxsize=128))
@@ -116,33 +129,37 @@ def topic_interest(region, unit: str, search:str=None, start: datetime=None, end
 
     if end is None:
         end = datetime.now()
+        # end = datetime(year=end.year, month=end.month, day=end.day, hour=end.hour)
     if start is None:
         start = end-relativedelta(days=unit_value[unit])
 
-    target_region = Region.get(Region.region_id == region)
+    videos = Video.select().where((Video.published >= start) & (Video.published <= end))
+    stats = []
+    # for v in videos:
+    statistic = Stats.select().where((Stats.trending_region == region) & Stats.video.in_(videos))
 
-    stats = Statistic.select(
-        Statistic.video,
-        Statistic.date,
-        Statistic.comment, Statistic.like, Statistic.dislike,
-        Statistic.rank, Statistic.view, Statistic.trending_region,
-    )
+    for s in statistic:
+        v = s.video
+        if 'data' not in s.stats:
+            continue
+        sub_stats = s.stats['data']
+        t = pd.DataFrame(sub_stats)
+        t['video'] = v
+        stats.append(t)
+    
+    df = pd.concat(stats, axis=0)
+    df['date'] = pd.to_datetime(df['date'])
+    print(len(df))
+    tag_data = cluster_stats_date(df, unit)
 
-    stats = stats.where((Statistic.date >= start ) & (Statistic.date <= end) 
-        & (Statistic.trending_region == target_region)
-        ).order_by(-Statistic.date)
-
-    logging.info('start cluster')
-    tag_data = cluster_stats_date(stats, unit)
-    logging.info('stop cluster')
 
     result = {
-        'id': target_region.region_id,
-        'name': target_region.name,
+        'id': region.region_id,
+        'name': region.name,
         'topic': [],
         'geo': {
-            'lat': target_region.lat,
-            'lon': target_region.lon
+            'lat': region.lat,
+            'lon': region.lon
         }
     }
     total_weight = 0
@@ -158,35 +175,41 @@ def topic_interest(region, unit: str, search:str=None, start: datetime=None, end
 
     result['topic'] = result['topic'][:topic_limit]
     result['topic'].sort(key=lambda x: x[1], reverse=True)
-
     return result
 
 
 @cached(cache=LRUCache(maxsize=128))
-def topic_filter(region_id, unit: str, search:str=None, start: datetime=None, end: datetime=None, 
+def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None, end: datetime=None, 
     sum:bool=False, topic_limit=100):
     if unit not in ['week', 'day', 'month', 'year']:
         raise ValueError("Invalid unit value")
 
     if end is None:
         end = datetime.now()
+        end = datetime(year=end.year, month=end.month, day=end.day, hour=end.hour)
     if start is None:
         start = end-relativedelta(days=unit_value[unit])
 
     target_region = Region.get(Region.region_id == region_id)
+    videos = Video.select().where((Video.published >= start) & (Video.published <= end))
+    stats = []
+    # for v in videos:
+    statistic = Stats.select().where((Stats.trending_region == target_region) & Stats.video.in_(videos))
 
-    stats = Statistic.select(
-        Statistic.video,
-        Statistic.date,
-        Statistic.comment, Statistic.like, Statistic.dislike,
-        Statistic.rank, Statistic.view, Statistic.trending_region,
-    )
+    for s in statistic:
+        v = s.video
+        if 'data' not in s.stats:
+            continue
+        sub_stats = s.stats['data']
+        t = pd.DataFrame(sub_stats)
+        t['video'] = v
+        stats.append(t)
+    
+    df = pd.concat(stats, axis=0)
+    df['date'] = pd.to_datetime(df['date'])
+    print(len(df))
 
-    stats = stats.where((Statistic.date >= start ) & (Statistic.date <= end) 
-        & (Statistic.trending_region == target_region)
-    ).order_by(-Statistic.date)
-
-    tag_data = cluster_stats_date(stats, unit)
+    tag_data = cluster_stats_date(df, unit)
 
     result = {
         'id': target_region.region_id,
@@ -198,6 +221,7 @@ def topic_filter(region_id, unit: str, search:str=None, start: datetime=None, en
         }
     }
     total_weight = 0
+
     for key, data in tag_data.items():
         if len(key) > 3 and len(key) < 30:
             df = pd.DataFrame(data)
@@ -212,6 +236,14 @@ def topic_filter(region_id, unit: str, search:str=None, start: datetime=None, en
     return result
 
 if __name__ == '__main__':
-    data = topic_interest('TW', 'week', topic_limit=200)
+    # all_region = [r.region_id for r in Region.select() if r.region_id != '00']
+    # for r in all_region:
+    #     data = topic_interest(r, 'week', topic_limit=200)
+    #     data = topic_interest(r, 'day', topic_limit=200)
+    #     data = topic_interest(r, 'month', topic_limit=200)
+    #     data = topic_filter(r, 'week', topic_limit=200)
+    #     data = topic_filter(r, 'day', topic_limit=200)
+    #     data = topic_filter(r, 'month', topic_limit=200)
+    data = topic_interest(Region.get(Region.region_id == 'TW'), 'month')
+    data = topic_filter('TW', 'month')
     print(data)
-

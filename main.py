@@ -13,7 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-all_region = [r.region_id for r in Region.select()]
+all_region = [r.region_id for r in Region.select() if r.region_id != '00']
 
 @app.get("/main")
 def primary_view(search: str=None, unit: str="hourly", 
@@ -28,7 +28,9 @@ def primary_view(search: str=None, unit: str="hourly",
             if len(r) > 1:
                 target_regions.append(r)
     for r in target_regions:
-        results.append( topic_filter(r, unit, search, start, end, topic_limit=top) )
+        region_result = topic_filter(r, unit, search, start, end, topic_limit=top)
+        if len(region_result) > 0:
+            results.append( region_result )
 
     return {
         'status': 'ok',

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from peewee import *
-from playhouse.postgres_ext import PostgresqlExtDatabase, JSONField, ArrayField, IntervalField, TSVectorField
+from playhouse.postgres_ext import PostgresqlExtDatabase, JSONField, ArrayField, IntervalField, TSVectorField, BinaryJSONField
 from settings import POSTGRESQL_SETTINGS
 
 
@@ -57,7 +57,7 @@ class Video(BaseModel):
     '''
         search_description=fn.to_tsvector(description))
     '''
-    search_description = TSVectorField()
+    # search_description = TSVectorField()
     tags = ArrayField(CharField)
     category_id = IntegerField(default=0)
     duration = IntervalField() # timedelta
@@ -83,6 +83,16 @@ class Statistic(BaseModel):
     trending_region = ForeignKeyField(Region, null=True)
     video = ForeignKeyField(Video, backref='stats')
 
+
+class Stats(BaseModel):
+    trending_region = ForeignKeyField(Region, null=True)
+    video = ForeignKeyField(Video, backref='stats')
+    stats = BinaryJSONField(default={})
+
+    class Meta:
+        indexes = (
+            (('video', 'trending_region'), True),
+        )
 
 class Activity(BaseModel):
     action = CharField(max_length=32)
