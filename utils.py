@@ -183,8 +183,8 @@ def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, 
 
     df = pd.concat(stats, axis=0)
     df['date'] = pd.to_datetime(df['date'])
+    df.set_index('date')
     df = df[(df['date'] > start) & (df['date'] < end)]
-    # print(len(df))
     tag_data = cluster_stats_date(df, unit)
 
     total_weight = 0
@@ -241,6 +241,7 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
         return result
     df = pd.concat(stats, axis=0)
     df['date'] = pd.to_datetime(df['date'])
+    df.set_index('date')
     df = df[(df['date'] > start) & (df['date'] < end)]
     # print(len(df))
 
@@ -262,5 +263,5 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
     return result
 
 if __name__ == '__main__':
-    data = topic_filter('TW', 'day', topic_limit=10)
+    data = topic_interest('TW', 'day', topic_limit=10)
     print(len(data['topic']))
