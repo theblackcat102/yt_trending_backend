@@ -183,6 +183,7 @@ def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, 
 
     df = pd.concat(stats, axis=0)
     df['date'] = pd.to_datetime(df['date'])
+    df = df[(df['date'] > start) & (df['date'] < end)]
     # print(len(df))
     tag_data = cluster_stats_date(df, unit)
 
@@ -221,7 +222,7 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
         end = datetime.now()
         end = datetime(year=end.year, month=end.month, day=end.day, hour=end.hour)
     if start is None:
-        start = end-relativedelta(days=unit_value[unit])
+        start = end-relativedelta(days=unit_value[unit]+2)
 
     videos = Video.select().where((Video.published >= start) & (Video.published <= end))
     stats = []
@@ -240,6 +241,7 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
         return result
     df = pd.concat(stats, axis=0)
     df['date'] = pd.to_datetime(df['date'])
+    df = df[(df['date'] > start) & (df['date'] < end)]
     # print(len(df))
 
     tag_data = cluster_stats_date(df, unit)
@@ -260,5 +262,5 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
     return result
 
 if __name__ == '__main__':
-    data = topic_filter('TW', 'week', topic_limit=10)
+    data = topic_filter('TW', 'day', topic_limit=10)
     print(len(data['topic']))

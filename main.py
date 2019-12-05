@@ -3,6 +3,7 @@ from datetime import datetime
 from starlette.middleware.cors import CORSMiddleware
 from utils import topic_filter, topic_interest
 from models import Region
+from datetime import datetime
 import multiprocessing as mp
 from custom_pool import CustomPool
 import dateparser
@@ -21,7 +22,7 @@ all_region = [ r.strip() for r in open('valid_region.txt', 'r').readlines() ]
 @app.get("/main")
 def primary_view(search: str=None, unit: str="day",
     region: str="all", start:str=None, end:str=None,
-    lw: float=1, vw: float=1, cw: float=1, rw: float=1, dw: float=1,
+    lw: float=0, vw: float=0, cw: float=0, rw: float=1, dw: float=0,
     top: int=5):
 
     if unit not in ['week', 'day', 'month', 'year']:
@@ -41,14 +42,15 @@ def primary_view(search: str=None, unit: str="day",
     if start is not None:
         start = dateparser.parse(str(start))
 
+    end = datetime.now()
     if end is not None:
         end = dateparser.parse(str(end))
 
     for r in target_regions:
         param = (r, unit, search, start, end, False, top, lw, vw, cw, rw, dw)
         params.append(param)
-
-    pool = CustomPool(1)
+    pool_size = 3 if len(target_regions) > 2 else 1
+    pool = CustomPool(pool_size)
 
     p_results = pool.starmap(topic_interest, params)
     pool.close()
@@ -79,6 +81,7 @@ def read_item(region_id:str, search: str="", unit: str="day",
     if start is not None:
         start = dateparser.parse(str(start))
 
+    end = datetime.now()
     if end is not None:
         end = dateparser.parse(str(end))
 
