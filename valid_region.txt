@@ -2,10 +2,18 @@ US
 GB
 SG
 HK
+CH
+VN
+AU
+PR
+NL
 MY
 IN
 ID
 PH
+KZ
+IE
+PA
 VI
 DE
 DK
@@ -18,7 +26,7 @@ AU
 NZ
 IT
 FR
-CH
+AE
 TH
 SK
 JP

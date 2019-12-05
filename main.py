@@ -62,7 +62,7 @@ def primary_view(search: str=None, unit: str="day",
         param = (r, unit, search, start, end, False, top, lw, vw, cw, rw, dw)
         params.append(param)
 
-    pool_size = min(len(params), 2)
+    pool_size = min(len(params), 3)
 
     q = mp.Queue()
     process = NoDaemonProcess(target=pool_wrapper, args=(topic_interest, params, q, pool_size))
