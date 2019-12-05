@@ -5,7 +5,7 @@ from utils import topic_filter, topic_interest
 from models import Region
 from datetime import datetime
 import multiprocessing as mp
-from custom_pool import CustomPool
+from custom_pool import CustomPool, NoDaemonProcess
 import dateparser
 
 app = FastAPI(debug=False)
@@ -18,6 +18,18 @@ app.add_middleware(
 )
 
 all_region = [ r.strip() for r in open('valid_region.txt', 'r').readlines() ]
+
+def pool_wrapper(function, params, queue, pool_size=1):
+    '''Wrap a pool inside a pool of size 1
+    '''
+    pool = CustomPool(pool_size)
+    p_results = pool.starmap(function, params)
+    pool.close()
+    results = []
+    for r in p_results:
+        if len(r['topic']) > 0:
+            results.append(r)
+    queue.put(results)
 
 @app.get("/main")
 def primary_view(search: str=None, unit: str="day",
@@ -49,16 +61,14 @@ def primary_view(search: str=None, unit: str="day",
     for r in target_regions:
         param = (r, unit, search, start, end, False, top, lw, vw, cw, rw, dw)
         params.append(param)
-    pool_size = 1
-    pool = CustomPool(pool_size)
 
-    p_results = pool.starmap(topic_interest, params)
-    pool.close()
+    pool_size = min(len(params), 2)
 
-    results = []
-    for r in p_results:
-        if len(r['topic']) > 0:
-            results.append(r)
+    q = mp.Queue()
+    process = NoDaemonProcess(target=pool_wrapper, args=(topic_interest, params, q, pool_size))
+    process.start()
+    results = q.get()
+    process.join()
 
     return {
         'status': 'ok',
