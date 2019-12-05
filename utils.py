@@ -161,7 +161,7 @@ def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, 
         end = datetime.now()
         # end = datetime(year=end.year, month=end.month, day=end.day, hour=end.hour)
     if start is None:
-        start = end-relativedelta(days=unit_value[unit])
+        start = end-relativedelta(days=unit_value[unit]+2)
 
     videos = Video.select().where((Video.published >= start) & (Video.published <= end))
 

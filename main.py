@@ -49,7 +49,7 @@ def primary_view(search: str=None, unit: str="day",
     for r in target_regions:
         param = (r, unit, search, start, end, False, top, lw, vw, cw, rw, dw)
         params.append(param)
-    pool_size = 3 if len(target_regions) > 2 else 1
+    pool_size = 1
     pool = CustomPool(pool_size)
 
     p_results = pool.starmap(topic_interest, params)
