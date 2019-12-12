@@ -76,8 +76,8 @@ def primary_view(search: str=None, unit: str="day",
     return {
         'status': 'ok',
         'date': {
-            'start': start.stftime('%Y-%m-%d'), 
-            'end': end.stftime('%Y-%m-%d')
+            'start': start.strftime('%Y-%m-%d'), 
+            'end': end.strftime('%Y-%m-%d')
         },
         'results':  results
     }
@@ -107,7 +107,7 @@ def read_item(region_id:str, search: str="", unit: str="day",
     result = topic_filter(region_id, unit=unit, search=search,
         start=start, end=end, topic_limit=top, lw=lw, vw=vw, cw=cw, rw=rw, dw=dw)
     result['date'] = {
-        'start': start.stftime('%Y-%m-%d'), 
-        'end': end.stftime('%Y-%m-%d')        
+        'start': start.strftime('%Y-%m-%d'), 
+        'end': end.strftime('%Y-%m-%d')        
     }
     return result
