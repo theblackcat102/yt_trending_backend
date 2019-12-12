@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 from datetime import datetime
 from starlette.middleware.cors import CORSMiddleware
-from utils import topic_filter, topic_interest
+from utils import topic_filter, topic_interest, unit_value
 from models import Region
 from datetime import datetime
 import multiprocessing as mp
 from custom_pool import CustomPool, NoDaemonProcess
 import dateparser
+from dateutil.relativedelta import relativedelta 
 
 app = FastAPI(debug=False)
 app.add_middleware(
@@ -57,6 +58,8 @@ def primary_view(search: str=None, unit: str="day",
     end = datetime.now()
     if end is not None:
         end = dateparser.parse(str(end))
+    if start is None:
+        start = end-relativedelta(days=unit_value[unit]+2)
 
     for r in target_regions:
         param = (r, unit, search, start, end, False, top, lw, vw, cw, rw, dw)
@@ -72,6 +75,10 @@ def primary_view(search: str=None, unit: str="day",
 
     return {
         'status': 'ok',
+        'date': {
+            'start': start.stftime('%Y-%m-%d'), 
+            'end': end.stftime('%Y-%m-%d')
+        },
         'results':  results
     }
 
@@ -94,8 +101,13 @@ def read_item(region_id:str, search: str="", unit: str="day",
     end = datetime.now()
     if end is not None:
         end = dateparser.parse(str(end))
+    if start is None:
+        start = end-relativedelta(days=unit_value[unit]+2)
 
     result = topic_filter(region_id, unit=unit, search=search,
         start=start, end=end, topic_limit=top, lw=lw, vw=vw, cw=cw, rw=rw, dw=dw)
-
+    result['date'] = {
+        'start': start.stftime('%Y-%m-%d'), 
+        'end': end.stftime('%Y-%m-%d')        
+    }
     return result
