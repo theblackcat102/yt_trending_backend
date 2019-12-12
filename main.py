@@ -63,7 +63,7 @@ def primary_view(search: str=None, unit: str="day",
     if end is not None and start is not None:
         if not validate_daterange(start, end ):
             return {
-                'status': 'error'
+                'status': 'error',
                 'msg': "Invalid daterange, start date must be earlier than end date"
             }
     for r in target_regions:
@@ -111,7 +111,7 @@ def read_item(region_id:str, search: str="", unit: str="day",
     if end is not None and start is not None:
         if not validate_daterange(start, end ):
             return {
-                'status': 'error'
+                'status': 'error',
                 'msg': "Invalid daterange, start date must be earlier than end date"
             }
 
