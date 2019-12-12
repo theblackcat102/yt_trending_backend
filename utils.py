@@ -25,6 +25,11 @@ unit_value = {
 }
 
 
+def validate_daterange(start:datetime, end: datetime):
+    if end <= start:
+        return False
+    return True
+
 def get_unit_value(date, unit):
     if unit == 'week':
         return int(date.strftime('%V'))

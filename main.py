@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from datetime import datetime
 from starlette.middleware.cors import CORSMiddleware
-from utils import topic_filter, topic_interest, unit_value
+from utils import topic_filter, topic_interest, unit_value, validate_daterange
 from models import Region
 from datetime import datetime
 import multiprocessing as mp
@@ -60,7 +60,12 @@ def primary_view(search: str=None, unit: str="day",
         end = dateparser.parse(str(end))
     if start is None:
         start = end-relativedelta(days=unit_value[unit]+2)
-
+    if end is not None and start is not None:
+        if not validate_daterange(start, end ):
+            return {
+                'status': 'error'
+                'msg': "Invalid daterange, start date must be earlier than end date"
+            }
     for r in target_regions:
         param = (r, unit, search, start, end, False, top, lw, vw, cw, rw, dw)
         params.append(param)
@@ -103,6 +108,12 @@ def read_item(region_id:str, search: str="", unit: str="day",
         end = dateparser.parse(str(end))
     if start is None:
         start = end-relativedelta(days=unit_value[unit]+2)
+    if end is not None and start is not None:
+        if not validate_daterange(start, end ):
+            return {
+                'status': 'error'
+                'msg': "Invalid daterange, start date must be earlier than end date"
+            }
 
     result = topic_filter(region_id, unit=unit, search=search,
         start=start, end=end, topic_limit=top, lw=lw, vw=vw, cw=cw, rw=rw, dw=dw)
