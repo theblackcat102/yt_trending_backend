@@ -1,4 +1,4 @@
-from models import Video, Activity, Region, Channel, Stats, postgres_database
+from models import Video, DailyTrend,Activity, Region, Channel, Stats, postgres_database
 from cachetools import LRUCache, cached
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -13,7 +13,6 @@ import re
 import logging
 import multiprocessing as mp
 from custom_pool import CustomPool
-from cache import MainCache, SecondaryCache, get_main_cache
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
 
 black_list_tags = list(set([ tag.strip() for tag in open('blacklist.txt', 'r').readlines() ]))
@@ -213,60 +212,193 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
     lw: float=0, vw: float=0, cw: float=0, rw: float=1, dw: float=0):
     if unit not in ['week', 'day', 'month', 'year']:
         raise ValueError("Invalid unit value")
-    target_region = Region.get(Region.region_id == region_id)
-    result = {
-        'id': target_region.region_id,
-        'name': target_region.name,
-        'topic': [],
-        'geo': {
-            'lat': target_region.lat,
-            'lon': target_region.lon
-        }
-    }
+    today = datetime.now()
+    today = datetime(year=today.year, month=today.month, day=today.day)
     if end is None:
-        end = datetime.now()
-        end = datetime(year=end.year, month=end.month, day=end.day, hour=end.hour)
+        end = today
+    else:
+        end = datetime(year=end.year, month=end.month, day=end.day)
     if start is None:
         start = end-relativedelta(days=unit_value[unit]+2)
 
-    videos = Video.select().where((Video.published >= start) & (Video.published <= end))
-    stats = []
-    # for v in videos:
-    statistic = Stats.select().where((Stats.trending_region == target_region) & Stats.video.in_(videos))
+    region = Region.get(Region.region_id == region_id)
 
-    for s in statistic:
-        v = s.video
-        if 'data' not in s.stats:
+    result = {
+        'id': region.region_id,
+        'name': region.name,
+        'topic': [],
+        'geo': {
+            'lat': region.lat,
+            'lon': region.lon
+        }
+    }
+    daily_trends = DailyTrend.select().where(
+            (DailyTrend.time >= start) & (DailyTrend.time <= end) & (DailyTrend.region == region))
+    daily_metrics = []
+    for trend in daily_trends:
+        stats = []
+        for metric in trend.metrics:
+            m_ = metric['stats']
+            m_['tag'] = metric['tag'].replace('#', '')
+            m_['date'] = trend.time
+            stats.append(m_)
+        df = pd.DataFrame(stats)
+        # df['date'] = pd.to_datetime(df['date'])
+        daily_metrics.append(df)
+
+    if end >= today:
+        from cache import LatestTrend
+        try:
+            trend = LatestTrend.get(LatestTrend.region_id == region_id)
+            today_stats = trend.metrics
+        except:
+            today_stats = []
+        stats = []
+        for metric in today_stats:
+            m_ = metric['stats']
+            m_['date'] = today
+            m_['tag'] = metric['tag'].replace('#', '')
+            stats.append(m_)
+        if len(stats):
+            df = pd.DataFrame(stats)
+            daily_metrics.append(df)
+
+    if len(daily_metrics) > 0:
+        df = pd.concat(daily_metrics, axis=0)
+        df.set_index('tag')
+        df = df.groupby(['tag', 'date']).mean()
+        df['weight'] = (101-df['rank'])*rw + ((df['view'])*vw + (df['comment'])*cw  + (df['like'])*lw - (df['dislike']*dw))/df['view']
+        df['tag'] = list([ r[0] for r in df.index] )
+        df['date'] = list([ r[1].strftime("%Y-%m-%dT%HH:%MM:%SS") for r in df.index] )
+        topics = df.to_dict(orient='records')
+
+        result['topic'] = topics
+    return result
+
+def get_today_trend(region):
+    day_ = datetime.now()
+    day = datetime(year=day_.year, month=day_.month, day=day_.day)
+    date = day.strftime("%Y-%m-%d")
+    end_of_day = day + timedelta(hours=23, minutes=23, seconds=23)
+    region_id = region.id
+    cursor = postgres_database.execute_sql("select m.id, m.video_id, m.trending_region_id, m.stats from stats as m, jsonb_array_elements(stats->'data') point where point->>'date' like '{}%%' and m.trending_region_id = {};".format(date, int(region_id)))
+    stats, count = [], 0
+    result = []
+
+    for row in tqdm(cursor.fetchall()):
+        stats_id, video_id, _, stat_ = row
+        v = Video.get(Video.id == video_id)
+        if 'data' not in stat_:
             continue
-        sub_stats = s.stats['data']
+        sub_stats = stat_['data']
+
         t = pd.DataFrame(sub_stats)
+        v.tags = extract_video_unique_keyword(v)
         t['video'] = v
+
         stats.append(t)
+        count += 1
+
     if len(stats) == 0:
+        print('return early')
         return result
     df = pd.concat(stats, axis=0)
     df['date'] = pd.to_datetime(df['date'])
     df.set_index('date')
-    df = df[(df['date'] > start) & (df['date'] < end)]
-    # print(len(df))
+    df = df[(df['date'] >= day) & (df['date'] <= end_of_day)]
+    numeric_columns = ["like", "rank", "view", "comment", "dislike", "favorite"]
+    df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric)
 
-    tag_data = cluster_stats_date(df, unit)
+    tag_data = cluster_stats_date(df, 'day')
 
     total_weight = 0
 
     for key, data in tag_data.items():
-        if len(key) > 3 and len(key) < 30:
+        if len(key) >= 3 and len(key) < 30:
             df = pd.DataFrame(data)
+
+            df = df.groupby(['date']).mean()
             df['norm_view'] = df['view']/df['view'].sum()
             # df['weight'] =  (df['like'] + df['dislike'])/df['view'] + ((101-df['rank'])*1000)*df['norm_view']
-            df['weight'] = (101-df['rank'])*rw + ((df['comment']*cw) + (df['view']*vw) + (df['like']*lw) - (df['dislike']*dw))/df['view']
-            stats = df[['weight', 'like', 'dislike', 'view', 'rank', 'norm_view', 'date']].to_dict(orient='records')
-            result['topic'].append({
+            df['weight'] = (101-df['rank']) + ((df['comment']) + (df['view']) + (df['like']) - (df['dislike']))/df['view']
+
+            stats = df[['weight', 'like', 'dislike', 'comment', 'view', 'rank', 'norm_view']].mean(axis=0).to_dict()
+            result.append({
                 'tag': key,
                 'stats': stats
             })
     return result
 
+def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, end: datetime=None, 
+    sum:bool=False, topic_limit=100, 
+    lw: float=1, vw: float=1, cw: float=1, rw: float=1, dw: float=1):
+
+    today = datetime.now()
+    today = datetime(year=today.year, month=today.month, day=today.day)
+    if end is None:
+        end = today
+    if start is None:
+        start = end-relativedelta(days=unit_value[unit]+2)
+
+    region = Region.get(Region.region_id == region_id)
+
+    result = {
+        'id': region.region_id,
+        'name': region.name,
+        'topic': [],
+        'geo': {
+            'lat': region.lat,
+            'lon': region.lon
+        }
+    }
+    daily_trends = DailyTrend.select().where(
+            (DailyTrend.time >= start) & (DailyTrend.time <= end) & (DailyTrend.region == region))
+    daily_metrics = []
+    for trend in daily_trends:
+        stats = []
+        for metric in trend.metrics:
+            m_ = metric['stats']
+            m_['tag'] = metric['tag'].replace('#', '')
+            m_['date'] = trend.time
+            stats.append(m_)
+        df = pd.DataFrame(stats)
+        daily_metrics.append(df)
+
+    if end >= today:
+        from cache import LatestTrend
+        try:
+            trend = LatestTrend.get(LatestTrend.region_id == region_id)
+            today_stats = trend.metrics
+        except:
+            today_stats = []
+        stats = []
+        for metric in today_stats:
+            m_ = metric['stats']
+            m_['tag'] = metric['tag'].replace('#', '')
+            m_['date'] = today
+            stats.append(m_)
+        if len(stats):
+            df = pd.DataFrame(stats)
+            daily_metrics.append(df)        
+
+    if len(daily_metrics) > 0:
+        df = pd.concat(daily_metrics, axis=0)
+        df.set_index('tag')
+        df = df.drop(columns=["date"])
+
+        df = df.groupby(['tag']).mean()
+        df['weight'] = (101-df['rank'])*rw + ((df['view'])*vw + (df['comment'])*cw  + (df['like'])*lw - (df['dislike']*dw))/df['view']
+        df['tag'] = df.index
+        topics = df.to_dict(orient='records')
+        topics.sort(key=lambda x: x['weight'], reverse=True)
+        result['topic'] = [ (t['tag'], t['weight']) for t in topics[:topic_limit] ]
+    return result
+
+
 if __name__ == '__main__':
-    data = topic_interest('TW', 'day', topic_limit=10)
+    end = datetime.now()
+    start = datetime.now() - timedelta(days=10)
+
+    data = trending_topic('SG', 'day', topic_limit=100, end=end, start=start)
     print(len(data['topic']))
+    print(data['topic'][:20])

@@ -1,10 +1,11 @@
 from fastapi import FastAPI
 from datetime import datetime
 from starlette.middleware.cors import CORSMiddleware
-from utils import topic_filter, topic_interest, unit_value, validate_daterange
-from models import Region
+from utils import topic_filter, topic_interest, unit_value, validate_daterange, trending_topic
 from datetime import datetime
 import multiprocessing as mp
+import pandas as pd
+from models import DailyTrend, Region
 from custom_pool import CustomPool, NoDaemonProcess
 import dateparser
 from dateutil.relativedelta import relativedelta 
@@ -66,17 +67,12 @@ def primary_view(search: str=None, unit: str="day",
                 'status': 'error',
                 'msg': "Invalid daterange, start date must be earlier than end date"
             }
+    results = []
     for r in target_regions:
         param = (r, unit, search, start, end, False, top, lw, vw, cw, rw, dw)
-        params.append(param)
+        results.append(trending_topic(*param))
+        # params.append(param)
 
-    pool_size = min(len(params), 3)
-
-    q = mp.Queue()
-    process = NoDaemonProcess(target=pool_wrapper, args=(topic_interest, params, q, pool_size))
-    process.start()
-    results = q.get()
-    process.join()
 
     return {
         'status': 'ok',

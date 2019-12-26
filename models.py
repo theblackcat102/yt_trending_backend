@@ -93,6 +93,17 @@ class Stats(BaseModel):
         indexes = (
             (('video', 'trending_region'), True),
         )
+class DailyTrend(BaseModel):
+    metrics = BinaryJSONField(default={})
+    time = DateTimeField()
+    region = ForeignKeyField(Region)
+
+    class Meta:
+        indexes = (
+            (("region", "time"), True),
+            (("region"), False),
+        )
+
 
 class Activity(BaseModel):
     action = CharField(max_length=32)
@@ -118,10 +129,9 @@ class DataPoint(BaseModel):
         )
 
 
-
 def create_table():
-    postgres_database.drop_tables([DataPoint])
-    postgres_database.create_tables([DataPoint])
+    postgres_database.drop_tables([DailyTrend])
+    postgres_database.create_tables([DailyTrend])
 
 if __name__ == '__main__':
     create_table()
