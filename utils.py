@@ -362,7 +362,8 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
             m_['date'] = trend.time
             stats.append(m_)
         df = pd.DataFrame(stats)
-        daily_metrics.append(df)
+        if len(df)> 0:
+            daily_metrics.append(df)
 
     if end >= today:
         from cache import LatestTrend
@@ -379,18 +380,19 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
             stats.append(m_)
         if len(stats):
             df = pd.DataFrame(stats)
-            daily_metrics.append(df)        
+            if len(df)> 0:
+                daily_metrics.append(df)        
 
     if len(daily_metrics) > 0:
         df = pd.concat(daily_metrics, axis=0)
         df.set_index('tag')
         df = df.drop(columns=["date"])
-
         df = df.groupby(['tag']).mean()
         df['weight'] = (101-df['rank'])*rw + ((df['view'])*vw + (df['comment'])*cw  + (df['like'])*lw - (df['dislike']*dw))/df['view']
         df['tag'] = df.index
         topics = df.to_dict(orient='records')
         topics.sort(key=lambda x: x['weight'], reverse=True)
+        print(region_id)
         result['topic'] = [ (t['tag'], t['weight']) for t in topics[:topic_limit] ]
     return result
 
