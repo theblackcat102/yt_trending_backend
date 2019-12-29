@@ -275,6 +275,9 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
 
     if len(daily_metrics) > 0:
         df = pd.concat(daily_metrics, axis=0)
+        if search is not None and len(search) > 0:
+            df = df.loc[df['tag'].str.contains(search, regex=False)]
+
         df.set_index('tag')
         df = df.groupby(['tag', 'date']).mean()
         df['weight'] = (101-df['rank'])*rw + ((df['view'])*vw + (df['comment'])*cw  + (df['like'])*lw - (df['dislike']*dw))/df['view']
@@ -404,6 +407,9 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
 
     if len(daily_metrics) > 0:
         df = pd.concat(daily_metrics, axis=0)
+        if search is not None and len(search) > 0:
+            df = df.loc[df['tag'].str.contains(search, regex=False)]
+
         df.set_index('tag')
         df = df.drop(columns=["date"])
         df = df.groupby(['tag']).mean()
