@@ -5,7 +5,7 @@ from utils import topic_filter, topic_interest, unit_value, validate_daterange, 
 from datetime import datetime
 import multiprocessing as mp
 import pandas as pd
-from models import DailyTrend, Region, Video, Channel
+from models import DailyTrend, Region, Video, Channel, Stats
 from custom_pool import CustomPool, NoDaemonProcess
 import dateparser
 from dateutil.relativedelta import relativedelta 
@@ -123,7 +123,7 @@ def read_item(region_id:str, search: str="", unit: str="day",
 
 @app.get("/video")
 def list_video(search: str="", start:str=None, end:str=None, offset=0):
-    videos_query = Video.select(Video.title, Video.published, Video.id, Video.tags, Video.category_id, Video.duration)
+    videos_query = Video.select(Video.title, Video.published, Video.id, Video.tags, Video.category_id, Video.duration, Video.channel)
     if start is not None:
         start = dateparser.parse(str(start))
         videos_query = videos_query.where(Video.published >= start)
@@ -150,6 +150,7 @@ def list_video(search: str="", start:str=None, end:str=None, offset=0):
 @app.get("/video/{video_id}")
 def get_video(video_id: str):
     try:
+        print(video_id)
         video = Video.get(Video.id==video_id)
         video_stats = Stats.get(Stats.video==video) 
         video_dict = model_to_dict(video)
@@ -158,7 +159,8 @@ def get_video(video_id: str):
         video_dict['statistic'] = video_stats_
         video_dict['status'] = 'success'
         return video_dict
-    except:
+    except BaseException as e:
+        # print(e)
         return {
             'status': 'not found',
         }
@@ -177,7 +179,8 @@ def get_channel(channel_id: str):
         channel_['videos'] = videos_
         channel_['status'] = 'success'
         return channel_
-    except:
+    except BaseException as e:
+        print(e)
         return {
             'status': 'not found',
         }
@@ -188,10 +191,12 @@ def list_channel(search: str=None, country: str=None ,offset=0):
     channel_query = Channel.select(Channel.channel_id, Channel.title, Channel.description, Channel.country)
 
     if search is not None:
+        print(search)
         search = str(search)
         channel_query = channel_query.where(Match(Channel.title, search) | Match(Channel.description, search))
 
     if country is not None:
+        print('search country')
         region = Region.get(Region.region_id==country)
         channel_query = channel_query.where(Channel.country == region)
 
