@@ -139,7 +139,7 @@ def list_video(search: str="", start:str=None, end:str=None, offset=0):
     for idx, v in enumerate(videos_query[offset:]):
         json_data = model_to_dict(v)
         videos.append(json_data)
-        if idx > 30:
+        if idx > 10:
             break
 
     return {
@@ -199,7 +199,7 @@ def list_channel(search: str=None, country: str=None ,offset=0):
     for idx, c in enumerate(channel_query[offset:]):
         json_data = model_to_dict(c)
         channels.append(json_data)
-        if idx > 30:
+        if idx > 10:
             break
 
     return {
