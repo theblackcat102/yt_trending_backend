@@ -1,3 +1,4 @@
+from peewee import NodeList, SQL
 from models import Video, DailyTrend,Activity, Region, Channel, Stats, postgres_database
 from cachetools import LRUCache, cached
 from datetime import datetime, timedelta
@@ -234,6 +235,15 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
     }
     daily_trends = DailyTrend.select().where(
             (DailyTrend.time >= start) & (DailyTrend.time <= end) & (DailyTrend.region == region))
+
+    if search is not None and len(search) > 0:
+        exp = NodeList([
+            SQL("jsonb_message_to_tsvector("),
+            DailyTrend.metrics,
+            SQL(") @@ '{}'".format(search))
+            ], glue='')
+        daily_trends = daily_trends.where(exp)
+
     daily_metrics = []
     for trend in daily_trends:
         stats = []
@@ -353,6 +363,15 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
     }
     daily_trends = DailyTrend.select().where(
             (DailyTrend.time >= start) & (DailyTrend.time <= end) & (DailyTrend.region == region))
+
+    if search is not None and len(search) > 0:
+        exp = NodeList([
+            SQL("jsonb_message_to_tsvector("),
+            DailyTrend.metrics,
+            SQL(") @@ '{}'".format(search))
+            ], glue='')
+        daily_trends = daily_trends.where(exp)
+
     daily_metrics = []
     for trend in daily_trends:
         stats = []
@@ -392,15 +411,24 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
         df['tag'] = df.index
         topics = df.to_dict(orient='records')
         topics.sort(key=lambda x: x['weight'], reverse=True)
-        print(region_id)
         result['topic'] = [ (t['tag'], t['weight']) for t in topics[:topic_limit] ]
     return result
 
 
-if __name__ == '__main__':
-    end = datetime.now()
-    start = datetime.now() - timedelta(days=10)
 
-    data = trending_topic('SG', 'day', topic_limit=100, end=end, start=start)
-    print(len(data['topic']))
-    print(data['topic'][:20])
+if __name__ == '__main__':
+    from peewee import NodeList, SQL
+    exp = NodeList([
+        SQL("jsonb_message_to_tsvector("),
+        DailyTrend.metrics,
+        SQL(") @@ '韓國瑜'")
+        ], glue='')
+    query = DailyTrend.select().where(exp)
+    print(len(query))
+    # end = datetime.now()
+    # start = datetime.now() - timedelta(days=10)
+
+    # data = trending_topic('SG', 'day', topic_limit=100, end=end, start=start)
+    # print(len(data['topic']))
+    # print(data['topic'][:20])
+    # test()
