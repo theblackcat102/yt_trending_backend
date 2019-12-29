@@ -5,10 +5,12 @@ from utils import topic_filter, topic_interest, unit_value, validate_daterange, 
 from datetime import datetime
 import multiprocessing as mp
 import pandas as pd
-from models import DailyTrend, Region
+from models import DailyTrend, Region, Video, Channel
 from custom_pool import CustomPool, NoDaemonProcess
 import dateparser
 from dateutil.relativedelta import relativedelta 
+from playhouse.postgres_ext import Match
+from playhouse.shortcuts import model_to_dict, dict_to_model
 
 app = FastAPI(debug=False)
 app.add_middleware(
@@ -73,7 +75,6 @@ def primary_view(search: str=None, unit: str="day",
         results.append(trending_topic(*param))
         # params.append(param)
 
-
     return {
         'status': 'ok',
         'date': {
@@ -120,3 +121,88 @@ def read_item(region_id:str, search: str="", unit: str="day",
     return result
 
 
+@app.get("/video")
+def list_video(search: str="", start:str=None, end:str=None, offset=0):
+    videos_query = Video.select(Video.title, Video.published, Video.id, Video.tags, Video.category_id, Video.duration)
+    if start is not None:
+        start = dateparser.parse(str(start))
+        videos_query = videos_query.where(Video.published >= start)
+    if end is not None:
+        end = dateparser.parse(str(end))
+        videos_query = videos_query.where(Video.published <= end)
+    if search is not None:
+        search = str(search)
+        videos_query = videos_query.where(Match(Video.title, search) | Match(Video.description, search))
+    
+
+    videos = []
+    for idx, v in enumerate(videos_query[offset:]):
+        json_data = model_to_dict(v)
+        videos.append(json_data)
+        if idx > 30:
+            break
+
+    return {
+        'count': len(videos),
+        'videos': videos
+    }
+
+@app.get("/video/{video_id}")
+def get_video(video_id: str):
+    try:
+        video = Video.get(Video.id==video_id)
+        video_stats = Stats.get(Stats.video==video) 
+        video_dict = model_to_dict(video)
+        video_stats_ = model_to_dict(video_stats)
+
+        video_dict['statistic'] = video_stats_
+        video_dict['status'] = 'success'
+        return video_dict
+    except:
+        return {
+            'status': 'not found',
+        }
+
+
+@app.get("/channel/{channel_id}")
+def get_channel(channel_id: str):
+
+    try:
+        channel = Channel.get(Channel.channel_id==channel_id)
+        channel_ = model_to_dict(channel)
+        videos = Video.select().where(Video.channel==channel) 
+        videos_ = []
+        for v in videos:
+            videos_.append(model_to_dict(v))
+        channel_['videos'] = videos_
+        channel_['status'] = 'success'
+        return channel_
+    except:
+        return {
+            'status': 'not found',
+        }
+
+@app.get("/channel")
+def list_channel(search: str=None, country: str=None ,offset=0):
+
+    channel_query = Channel.select(Channel.channel_id, Channel.title, Channel.description, Channel.country)
+
+    if search is not None:
+        search = str(search)
+        channel_query = channel_query.where(Match(Channel.title, search) | Match(Channel.description, search))
+
+    if country is not None:
+        region = Region.get(Region.region_id==country)
+        channel_query = channel_query.where(Channel.country == region)
+
+    channels = []
+    for idx, c in enumerate(channel_query[offset:]):
+        json_data = model_to_dict(c)
+        channels.append(json_data)
+        if idx > 30:
+            break
+
+    return {
+        'count': len(channels),
+        'channels': channels
+    }
