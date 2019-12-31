@@ -417,7 +417,7 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
         df['tag'] = df.index
         topics = df.to_dict(orient='records')
         topics.sort(key=lambda x: x['weight'], reverse=True)
-        result['topic'] = [ (t['tag'], t['weight']) for t in topics[:topic_limit] ]
+        result['topic'] = [ {'tag':t['tag'], 'weight': t['weight'], 'rank': t['rank'], 'view': t['view'], 'like': t['like'], 'dislike': t['like'], 'comment': t['comment']  } for t in topics[:topic_limit] ]
     return result
 
 
