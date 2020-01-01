@@ -14,7 +14,6 @@ PH
 KZ
 IE
 PA
-VI
 DE
 DK
 RU
@@ -22,7 +21,6 @@ CA
 MX
 BR
 ZA
-AU
 NZ
 IT
 FR
