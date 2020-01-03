@@ -418,7 +418,10 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
             m_ = metric['stats']
             m_['tag'] = metric['tag'].replace('#', '')
             m_['date'] = today
-            m_['category'] = metric['category']
+            if 'category' not in metric:
+                m_['category'] = -1
+            else:
+                m_['category'] = metric['category']
             stats.append(m_)
         if len(stats):
             df = pd.DataFrame(stats)
