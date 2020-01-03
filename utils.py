@@ -284,12 +284,17 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
             df = df.loc[df['tag'].str.contains(search, regex=False)]
 
         df.set_index('tag')
+        has_col = False
         if 'category' in df.columns:
-            df = df.drop(['category'], axis=1)
-        df = df.groupby(['tag', 'date']).mean()
+            df['category'] = [','.join(map(str, l)) for l in df['category']]
+            has_col = True
+        df = df.groupby(['tag', 'date', 'category']).mean()
         df['weight'] = (101-df['rank'])*rw + ((df['view'])*vw + (df['comment'])*cw  + (df['like'])*lw - (df['dislike']*dw))/df['view']
         df['tag'] = list([ r[0] for r in df.index] )
         df['date'] = list([ r[1].strftime("%Y-%m-%dT%HH:%MM:%SS") for r in df.index] )
+
+        if has_col:
+            df['category'] = list( [ r[2].split(',') for r in df.index] )
         topics = df.to_dict(orient='records')
 
         result['topic'] = topics
@@ -419,12 +424,28 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
 
         df.set_index('tag')
         df = df.drop(columns=["date"])
-        df = df.groupby(['tag']).mean()
+        if 'category' in df.columns:
+            df['category'] = [','.join(map(str, l)) for l in df['category']]
+            df = df.groupby(['tag', 'category']).mean()
+        else:
+            df = df.groupby(['tag']).mean()
         df['weight'] = (101-df['rank'])*rw + ((df['view'])*vw + (df['comment'])*cw  + (df['like'])*lw - (df['dislike']*dw))/df['view']
         df['tag'] = df.index
         topics = df.to_dict(orient='records')
         topics.sort(key=lambda x: x['weight'], reverse=True)
-        result['topic'] = [ {'tag':t['tag'], 'weight': t['weight'], 'rank': t['rank'], 'view': t['view'], 'like': t['like'], 'dislike': t['like'], 'comment': t['comment']  } for t in topics[:topic_limit] ]
+        result['topic'] = []
+        for t in topics[:topic_limit]:
+            e = {
+                'tag':t['tag'], 
+                'weight': t['weight'], 
+                'rank': t['rank'], 
+                'view': t['view'], 
+                'like': t['like'], 
+                'dislike': t['like'], 
+                'comment': t['comment']  
+            }
+            if 'category' in t:
+                e['category'] = t['category'].split(',')
     return result
 
 
