@@ -6,6 +6,7 @@ from datetime import datetime
 import multiprocessing as mp
 import pandas as pd
 from models import DailyTrend, Region, Video, Channel, Stats
+from peewee import NodeList, SQL
 from custom_pool import CustomPool, NoDaemonProcess
 import dateparser
 from dateutil.relativedelta import relativedelta 
@@ -119,6 +120,61 @@ def read_item(region_id:str, search: str="", unit: str="day",
         'end': end.strftime('%Y-%m-%d')        
     }
     return result
+
+
+@app.get("/tag/{tag}")
+def get_tags(tag:str,start:str=None, end:str=None,unit: str="day",):
+    if unit not in ['week', 'day', 'month', 'year']:
+        return {
+            'status': 'error',
+            'msg': "unit should be :week, day, month, year"
+        }
+    if start is not None:
+        start = dateparser.parse(str(start))
+
+    end = datetime.now()
+    if end is not None:
+        end = dateparser.parse(str(end))
+    if start is None:
+        start = end-relativedelta(days=unit_value[unit]+2)
+    if end is not None and start is not None:
+        if not validate_daterange(start, end ):
+            return {
+                'status': 'error',
+                'msg': "Invalid daterange, start date must be earlier than end date"
+            }
+    print(tag)
+    exp = NodeList([
+            SQL("jsonb_message_to_tsvector("),
+            DailyTrend.metrics,
+            SQL(") @@ '{}'".format(tag.split(' ')[0]))
+            ], glue='')
+
+    daily_trends = DailyTrend.select().where(
+            (DailyTrend.time >= start) & (DailyTrend.time <= end))
+    daily_trends = daily_trends.where(exp)
+    daily_metrics = []
+    for trend in daily_trends:
+        for metric in trend.metrics:
+            if metric['tag'] == tag:
+                m_ = metric['stats']
+                m_['tag'] = metric['tag'].replace('#', '')
+                m_['date'] = trend.time.strftime("%Y-%m-%dT%HH:%MM:%SS")
+                if 'category' not in metric:
+                    m_['category'] = [-1]
+                else:
+                    m_['category'] = metric['category']
+                daily_metrics.append(m_)
+
+    return {
+        'status': 'ok',
+        'date': {
+            'start': start.strftime('%Y-%m-%d'), 
+            'end': end.strftime('%Y-%m-%d')
+        },
+        'results':  daily_metrics
+    }
+
 
 
 @app.get("/video")
