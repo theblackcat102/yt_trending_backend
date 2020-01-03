@@ -443,13 +443,22 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
         df.set_index('tag')
         df = df.drop(columns=["date"])
         if 'category' in df.columns:
-            df['category'] = [','.join(map(str, l)) for l in df['category']]
-            df = df.groupby(['tag', 'category']).mean()
+            # df['category'] = [','.join(map(str, l)) for l in df['category']]
+            # df = df.groupby(['tag', 'category'],as_index=False).mean()
+            f2 = lambda x: [z for y in x for z in y]
+            f1 = lambda x: ', '.join(x.dropna())
+            d = dict.fromkeys(df[['tag','category']].columns.difference(['tag','category']), f1)
+            d['category'] = f2
+            df1 = df.groupby('tag', as_index=False).agg(d)
+            df2 = df[['tag', 'rank', 'view', 'comment', 'like', 'dislike']].groupby(['tag'], as_index=False ).mean()
+            df = pd.concat([df1.set_index('tag'), df2.set_index('tag')], axis=1, join='inner').reset_index()
+
         else:
-            df = df.groupby(['tag']).mean()
+            df = df.groupby(['tag'], as_index=False ).mean()
         df['weight'] = (101-df['rank'])*rw + ((df['view'])*vw + (df['comment'])*cw  + (df['like'])*lw - (df['dislike']*dw))/df['view']
-        df['tag'] = [ r[0] for r in df.index]
-        df['category'] = [ r[1] for r in df.index]
+        # df['tag'] = [ r[0] for r in df.index]
+        # df['category'] = [ r[1] for r in df.index]
+
         topics = df.to_dict(orient='records')
         topics.sort(key=lambda x: x['weight'], reverse=True)
         result['topic'] = []
@@ -464,7 +473,7 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
                 'comment': t['comment']  
             }
             if 'category' in t:
-                e['category'] = [  int(float(c)) for c in  t['category'].split(',') ]
+                e['category'] = list(set(t['category']))
             result['topic'].append(e)
     return result
 
