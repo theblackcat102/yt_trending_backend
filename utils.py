@@ -256,6 +256,7 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
             m_ = metric['stats']
             m_['tag'] = metric['tag'].replace('#', '')
             m_['date'] = trend.time
+            m_['category'] = metric['category']
             stats.append(m_)
         df = pd.DataFrame(stats)
         # df['date'] = pd.to_datetime(df['date'])
@@ -273,6 +274,7 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
             m_ = metric['stats']
             m_['date'] = today
             m_['tag'] = metric['tag'].replace('#', '')
+            m_['category'] = metric['category']
             stats.append(m_)
         if len(stats):
             df = pd.DataFrame(stats)
@@ -285,16 +287,19 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
 
         df.set_index('tag')
         has_col = False
+
         if 'category' in df.columns:
             df['category'] = [','.join(map(str, l)) for l in df['category']]
             has_col = True
-        df = df.groupby(['tag', 'date', 'category']).mean()
+            df = df.groupby(['tag', 'date', 'category']).mean()
+        else:
+            df = df.groupby(['tag', 'date']).mean()
         df['weight'] = (101-df['rank'])*rw + ((df['view'])*vw + (df['comment'])*cw  + (df['like'])*lw - (df['dislike']*dw))/df['view']
         df['tag'] = list([ r[0] for r in df.index] )
         df['date'] = list([ r[1].strftime("%Y-%m-%dT%HH:%MM:%SS") for r in df.index] )
 
         if has_col:
-            df['category'] = list( [ r[2].split(',') for r in df.index] )
+            df['category'] = list( [ [ int(float(l)) for l in r[2].split(',')] for r in df.index] )
         topics = df.to_dict(orient='records')
 
         result['topic'] = topics
@@ -364,7 +369,7 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
         end = today
     if start is None:
         start = end-relativedelta(days=unit_value[unit]+2)
-
+    print(start, end)
     region = Region.get(Region.region_id == region_id)
 
     result = {
@@ -386,7 +391,7 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
             SQL(") @@ '{}'".format(search))
             ], glue='')
         daily_trends = daily_trends.where(exp)
-
+    print('size', len(daily_trends))
     daily_metrics = []
     for trend in daily_trends:
         stats = []
@@ -394,7 +399,9 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
             m_ = metric['stats']
             m_['tag'] = metric['tag'].replace('#', '')
             m_['date'] = trend.time
+            m_['category'] = metric['category']
             stats.append(m_)
+
         df = pd.DataFrame(stats)
         if len(df)> 0:
             daily_metrics.append(df)
@@ -411,12 +418,13 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
             m_ = metric['stats']
             m_['tag'] = metric['tag'].replace('#', '')
             m_['date'] = today
+            m_['category'] = metric['category']
             stats.append(m_)
         if len(stats):
             df = pd.DataFrame(stats)
             if len(df)> 0:
-                daily_metrics.append(df)        
-
+                daily_metrics.append(df)
+    print('m size', len(daily_metrics))
     if len(daily_metrics) > 0:
         df = pd.concat(daily_metrics, axis=0)
         if search is not None and len(search) > 0:
@@ -430,7 +438,8 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
         else:
             df = df.groupby(['tag']).mean()
         df['weight'] = (101-df['rank'])*rw + ((df['view'])*vw + (df['comment'])*cw  + (df['like'])*lw - (df['dislike']*dw))/df['view']
-        df['tag'] = df.index
+        df['tag'] = [ r[0] for r in df.index]
+        df['category'] = [ r[1] for r in df.index]
         topics = df.to_dict(orient='records')
         topics.sort(key=lambda x: x['weight'], reverse=True)
         result['topic'] = []
@@ -445,24 +454,25 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
                 'comment': t['comment']  
             }
             if 'category' in t:
-                e['category'] = t['category'].split(',')
+                e['category'] = [  int(float(c)) for c in  t['category'].split(',') ]
+            result['topic'].append(e)
     return result
 
 
 
 if __name__ == '__main__':
-    from peewee import NodeList, SQL
-    exp = NodeList([
-        SQL("jsonb_message_to_tsvector("),
-        DailyTrend.metrics,
-        SQL(") @@ '韓國瑜'")
-        ], glue='')
-    query = DailyTrend.select().where(exp)
-    print(len(query))
-    # end = datetime.now()
-    # start = datetime.now() - timedelta(days=10)
+    # from peewee import NodeList, SQL
+    # exp = NodeList([
+    #     SQL("jsonb_message_to_tsvector("),
+    #     DailyTrend.metrics,
+    #     SQL(") @@ '韓國瑜'")
+    #     ], glue='')
+    # query = DailyTrend.select().where(exp)
+    # print(len(query))
+    end = datetime.now()
+    start = datetime.now() - timedelta(days=10)
 
-    # data = trending_topic('SG', 'day', topic_limit=100, end=end, start=start)
-    # print(len(data['topic']))
-    # print(data['topic'][:20])
+    data = trending_topic('TW', 'day', topic_limit=100, end=end, start=start)
+    print(len(data['topic']))
+    print(data['topic'][:20])
     # test()
