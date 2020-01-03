@@ -114,6 +114,7 @@ def _extract_tag(df):
         key = '{}-{}'.format(prime_key, secondary_key)
         s_dict = s
         s_dict['key'] = key
+        s_dict['category'] = s['video'].category_id
         tags = s['video'].tags
         for tag in tags:
             tag_data[tag].append(s_dict)        
@@ -201,7 +202,11 @@ def topic_interest(region_id, unit: str, search:str=None, start: datetime=None, 
             df['weight'] = (101-df['rank'])*rw + ((df['comment']*cw) + (df['view']*vw) + (df['like']*lw) - (df['dislike']*dw))/df['view']
             interest_weight = df['weight'].mean()
             total_weight += interest_weight
-            result['topic'].append((key.lower(), interest_weight))
+            result['topic'].append({
+                'tag': key,
+                'stats': stats,
+                'category': list(set(df['category'].tolist())),
+            })
 
     result['topic'] = result['topic'][:topic_limit]
     result['topic'].sort(key=lambda x: x[1], reverse=True)
@@ -279,6 +284,8 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
             df = df.loc[df['tag'].str.contains(search, regex=False)]
 
         df.set_index('tag')
+        if 'category' in df.columns:
+            df = df.drop(['category'], axis=1)
         df = df.groupby(['tag', 'date']).mean()
         df['weight'] = (101-df['rank'])*rw + ((df['view'])*vw + (df['comment'])*cw  + (df['like'])*lw - (df['dislike']*dw))/df['view']
         df['tag'] = list([ r[0] for r in df.index] )
