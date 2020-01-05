@@ -145,15 +145,16 @@ def get_tags(tag:str,start:str=None, end:str=None,unit: str="day",):
             }
 
     daily_metrics = []
-    datapoint = DataPoint.select().where( (DataPoint.key == 'tag') & (DataPoint.value == tag))
-    if datapoint.exists():
-        datapoint = datapoint.get()
-        for point in datapoint.metrics:
-            m = point
-            m.pop('tag')
-            time = datetime.strptime(m['time'].split(' ')[0], "%Y-%m-%d")
-            if time >= start and time <= end:
-                daily_metrics.append(m)
+    datapoints = DataPoint.select().where( (DataPoint.key == 'tag') & (DataPoint.value == tag))
+    if datapoints.exists():
+        for datapoint in datapoints:
+            for point in datapoint.metrics:
+                m = point
+                m.pop('tag')
+                m['region'] = point.region.region_id
+                time = datetime.strptime(m['time'].split(' ')[0], "%Y-%m-%d")
+                if time >= start and time <= end:
+                    daily_metrics.append(m)
     return {
         'status': 'ok',
         'date': {
