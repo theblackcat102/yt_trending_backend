@@ -479,6 +479,16 @@ def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, 
 
 
 
+def test_query():
+    exp = NodeList([
+            DailyTrend.metrics,
+            SQL("->>'tag' in ('{}') ".format('阿努納奇'))
+            ], glue='')
+    daily_trends = DailyTrend.select().where( exp)
+    print(daily_trends.sql())
+    print(len(daily_trends))
+
+
 if __name__ == '__main__':
     # from peewee import NodeList, SQL
     # exp = NodeList([
@@ -488,10 +498,10 @@ if __name__ == '__main__':
     #     ], glue='')
     # query = DailyTrend.select().where(exp)
     # print(len(query))
-    end = datetime.now()
-    start = datetime.now() - timedelta(days=10)
+    # end = datetime.now()
+    # start = datetime.now() - timedelta(days=10)
 
-    data = trending_topic('TW', 'day', topic_limit=100, end=end, start=start)
-    print(len(data['topic']))
-    print(data['topic'][:20])
-    # test()
+    # data = trending_topic('TW', 'day', topic_limit=100, end=end, start=start)
+    # print(len(data['topic']))
+    # print(data['topic'][:20])
+    test_query()
