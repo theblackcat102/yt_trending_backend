@@ -308,6 +308,7 @@ def topic_filter(region_id:str, unit: str, search:str=None, start: datetime=None
         result['topic'] = topics
     return result
 
+@cached(cache=LRUCache(maxsize=512))
 def get_today_trend(region):
     day_ = datetime.now()
     day = datetime(year=day_.year, month=day_.month, day=day_.day)
@@ -362,6 +363,7 @@ def get_today_trend(region):
             })
     return result
 
+@cached(cache=LRUCache(maxsize=512))
 def trending_topic(region_id, unit: str, search:str=None, start: datetime=None, end: datetime=None, 
     sum:bool=False, topic_limit=100, 
     lw: float=1, vw: float=1, cw: float=1, rw: float=1, dw: float=1):
