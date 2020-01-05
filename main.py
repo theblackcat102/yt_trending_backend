@@ -151,7 +151,7 @@ def get_tags(tag:str,start:str=None, end:str=None,unit: str="day",):
             for point in datapoint.metrics:
                 m = point
                 m.pop('tag')
-                m['region'] = point.region.region_id
+                m['region'] = datapoint.region.region_id
                 time = datetime.strptime(m['time'].split(' ')[0], "%Y-%m-%d")
                 if time >= start and time <= end:
                     daily_metrics.append(m)
