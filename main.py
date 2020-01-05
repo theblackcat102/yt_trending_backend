@@ -165,6 +165,66 @@ def get_tags(tag:str,start:str=None, end:str=None,unit: str="day",):
     }
 
 
+@app.get("/tag/{tag}/similar")
+def get_tags(tag:str,start:str=None, end:str=None,unit: str="day", ratio:float=1, top:int=5):
+    if unit not in ['week', 'day', 'month', 'year']:
+        return {
+            'status': 'error',
+            'msg': "unit should be :week, day, month, year"
+        }
+    if start is not None:
+        start = dateparser.parse(str(start))
+
+    end = datetime.now()
+    if end is not None:
+        end = dateparser.parse(str(end))
+    if start is None:
+        start = end-relativedelta(days=1000)
+    if end is not None and start is not None:
+        if not validate_daterange(start, end ):
+            return {
+                'status': 'error',
+                'msg': "Invalid daterange, start date must be earlier than end date"
+            }
+
+    daily_metrics = []
+
+    edit = int(len(tag)*ratio)
+
+    exp = NodeList([
+            SQL("levenshtein("),
+            DataPoint.value,
+            SQL(", '{}') <= {}".format(tag, edit)),
+            SQL(" order by levenshtein("),
+            DataPoint.value,
+            SQL(", '{}')".format(tag))
+            ], glue='')
+    datapoints = DataPoint.select().where(exp)
+
+    if datapoints.exists():
+        for datapoint in datapoints[:top]:
+            datapoint_metrics = []
+            for point in datapoint.metrics:
+                m = point
+                m.pop('tag')
+                m['region'] = datapoint.region.region_id
+                time = datetime.strptime(m['time'].split(' ')[0], "%Y-%m-%d")
+                if time >= start and time <= end:
+                    datapoint_metrics.append(m)
+            daily_metrics.append({
+                'tag': datapoint.value,
+                'data': datapoint_metrics
+            })
+    return {
+        'status': 'ok',
+        'date': {
+            'start': start.strftime('%Y-%m-%d'), 
+            'end': end.strftime('%Y-%m-%d')
+        },
+        'results':  daily_metrics
+    }
+
+
 
 @app.get("/video")
 def list_video(search: str="", start:str=None, end:str=None, offset=0):
