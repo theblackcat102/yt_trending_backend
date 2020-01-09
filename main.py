@@ -317,7 +317,7 @@ def list_channel(search: str=None, country: str=None ,offset=0):
     }
 
 
-@app.get("suggestion/{search}")
+@app.get("/suggestion/{search}")
 def suggestion(search:str, ratio=0.5, top=20):
 
     edit = int(len(search)*ratio)
