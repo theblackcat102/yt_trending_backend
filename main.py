@@ -117,7 +117,7 @@ def read_item(region_id:str, search: str="", unit: str="day",
         start=start, end=end, topic_limit=top, lw=lw, vw=vw, cw=cw, rw=rw, dw=dw)
     result['date'] = {
         'start': start.strftime('%Y-%m-%d'), 
-        'end': end.strftime('%Y-%m-%d')        
+        'end': end.strftime('%Y-%m-%d'),
     }
     return result
 
@@ -225,7 +225,6 @@ def get_tags(tag:str,start:str=None, end:str=None,unit: str="day", ratio:float=1
     }
 
 
-
 @app.get("/video")
 def list_video(search: str="", start:str=None, end:str=None, offset=0):
     videos_query = Video.select(Video.title, Video.published, Video.id, Video.tags, Video.category_id, Video.duration, Video.channel)
@@ -315,4 +314,27 @@ def list_channel(search: str=None, country: str=None ,offset=0):
     return {
         'count': len(channels),
         'channels': channels
+    }
+
+
+@app.get("suggestion/{search}")
+def suggestion(search:str, ratio=0.5, top=20):
+
+    edit = int(len(search)*ratio)
+
+    exp = NodeList([
+            SQL("levenshtein("),
+            DataPoint.value,
+            SQL(", '{}') <= {}".format(search, edit)),
+            SQL(" order by levenshtein("),
+            DataPoint.value,
+            SQL(", '{}')".format(search))
+            ], glue='')
+    datapoints = DataPoint.select().where(exp)
+    tags = []
+    if datapoints.exists():
+        for datapoint in datapoints[:top]:
+            tags.append(datapoint.value)
+    return {
+        'tags': tags
     }
