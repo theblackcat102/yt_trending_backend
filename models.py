@@ -130,8 +130,7 @@ class DataPoint(BaseModel):
 
 
 def create_table():
-    postgres_database.drop_tables([DailyTrend])
-    postgres_database.create_tables([DailyTrend])
+    postgres_database.create_tables([DailyTrend, DataPoint, Activity, Stats, Statistic, Video, Channel])
 
 if __name__ == '__main__':
     create_table()
