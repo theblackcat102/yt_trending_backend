@@ -20,7 +20,7 @@ PASSWORD="DB_PASSWORD"
 ```
 
 
-Then setup the environment and you 
+### Then setup the environment and you 
 
 ```
 virtualenv -p python3 env
@@ -28,13 +28,20 @@ source env/bin/activate
 pip install -r requirements.txt
 ```
 
-Initialize the database table
+
+
+###  Initialize the database table
 
 ```
 python models.py
 ```
 
-Once you have populate the table with data you can run the server using this command
+you may also want to execute the fn.sql and setup.sql if you want to speed things up such as keyword search etc
+
+This backend also relies on [fuzzystrmatch](https://www.postgresql.org/docs/10/fuzzystrmatch.html) extension for finding similar tags.
+
+
+### Once you have populate the table with data you can run the server using this command
 
 ```
 uvicorn main:app
