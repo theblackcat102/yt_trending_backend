@@ -28,7 +28,7 @@ six==1.13.0
 starlette==0.12.9
 tqdm==4.40.0
 tzlocal==2.0.0
-uvicorn==0.10.8
+uvicorn==0.11.7
 uvloop==0.14.0
 websockets==8.1
 Werkzeug==0.16.0
